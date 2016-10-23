@@ -1,103 +1,92 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
-
-# <codecell>
-
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import xml.etree.ElementTree as ET
+import xml.etree.cElementTree as ET
 import pprint
 import re
 import codecs
 import json
-import time
-from audit import *
 
 
 lower = re.compile(r'^([a-z]|_)*$')
-lower_colon = re.compile(r'^([a-z]|_)*:([a-z]|_)*$')
+lower_colon = re.compile(r'(^([a-z]|_)*):(([a-z]|_)*)$')
 problemchars = re.compile(r'[=\+/&<>;\'"\?%#$@\,\. \t\r\n]')
-addresschars = re.compile(r'addr:(\w+)')
 
 CREATED = [ "version", "changeset", "timestamp", "user", "uid"]
 
+mapping = {
+          "Av.": "Avenida",
+          "Av ": "Avenida ",
+          "R.":"Rua"
+        }
+postcode_re = re.compile(r'^\d{5}-\d{3}$', re.IGNORECASE)
+
+def update_name(name, mapping):
+    for key in mapping:
+        if key in name:
+            return name.replace(key, mapping[key])
+    return name
+
+def correctPostcode(value):
+    m = postcode_re.match(value)
+    if not m:
+        new_postcode = re.sub(r'(\d{5}).*?(\d{3}).*', r'\1-\2', value.encode("utf-8"));
+        m = postcode_re.match(new_postcode)
+        if m:
+            # print new_postcode
+            return new_postcode
+        return None
+    else:
+        return value
+
 def shape_element(element):
-    #node = defaultdict(set)
     node = {}
     if element.tag == "node" or element.tag == "way" :
-        #create the dictionary based on exaclty the value in element attribute.
-        node = {'created':{}, 'type':element.tag}
-        for k in element.attrib:
-            try:
-                v = element.attrib[k]
-            except KeyError:
+        node["type"] = element.tag
+        if element.tag == "node":
+          node["pos"] = [float(element.attrib['lat']), float(element.attrib['lon'])]
+          for attr in element.attrib:
+            if attr in CREATED:
+              if "created" not in node:
+                node["created"] = {}
+              node["created"][attr] = element.attrib[attr]
+            elif attr not in ['lat','lon']:
+              node[attr] = element.attrib[attr]
+
+        elif element.tag == "way":
+          node["node_refs"] = []
+          for nd in element.iter("nd"):
+            node["node_refs"].append(nd.attrib['ref'])
+
+        for tag in element.iter("tag"):
+            if ("k" not in tag.attrib):
+              continue
+
+            k = tag.attrib["k"]
+
+            if (problemchars.search(k)):
                 continue
-            if k == 'lat' or k == 'lon':
-                continue
-            if k in CREATED:
-                node['created'][k] = v
-            else:
-                node[k] = v
-        try:
-            node['pos']=[float(element.attrib['lat']),float(element.attrib['lon'])]
-        except KeyError:
-            pass
 
-        if 'address' not in node.keys():
-            node['address'] = {}
-        #Iterate the content of the tag
-        for stag in element.iter('tag'):
-            #Init the dictionry
+            m = lower_colon.match(k)
+            if (m and m.group(1) == "addr"):
+                if 'address' not in node:
+                    node['address'] = {};
 
-            k = stag.attrib['k']
-            v = stag.attrib['v']
-            #Checking if indeed prefix with 'addr' and no ':' afterwards
-            if k.startswith('addr:'):
-                if len(k.split(':')) == 2:
-                    content = addresschars.search(k)
-                    if content:
-                        node['address'][content.group(1)] = v
-            else:
-                node[k]=v
-        if not node['address']:
-            node.pop('address',None)
-        #Special case when the tag == way,  scrap all the nd key
-        if element.tag == "way":
-            node['node_refs'] = []
-            for nd in element.iter('nd'):
-                node['node_refs'].append(nd.attrib['ref'])
-
-# This section of code iterates over the second level 'k' and 'v' tags, checks for problem
-# characters, and assembles the node dict with specific boolean criteria. Note that to assemble
-# the address dict properly it has to be initialized above this code block, otherwise you
-# reset it with every tag iteration.
-        for tag in element.iter('tag'):
-
-            tagk = tag.attrib['k']
-            tagv = tag.attrib['v']
-            m = problemchars.search(tagk)
-            if not m:
-                if tagk == "addr:street":
-				    address['street'] = update_name(tagv,mapping)
-
-                elif tagk == 'addr:housenumber':
-                    address['housenumber'] = tagv
-                    node['address'] = address
-
-                elif 'addr' not in tagk:
-                    node[tagk] = tagv
+                if ('street' == m.group(3)):
+                    node['address']['street'] = update_name(tag.attrib['v'], mapping)
+                elif ('postcode' == m.group(3) and tag.attrib['v'] != None):
+                    node['address']['postcode'] = correctPostcode(tag.attrib['v'])
                 else:
-                    pass
+                    node['address'][m.group(3)] = tag.attrib['v']
+            else:
+                node[k] = tag.attrib['v']
 
         return node
-# if element.tag != to 'node' or 'way', bypass the other loops, and return none.
     else:
         return None
 
+
 def process_map(file_in, pretty = False):
-    """
-    Process the osm file to json file to be prepared for input file to monggo
-    """
+    # You do not need to change this file
     file_out = "{0}.json".format(file_in)
     data = []
     with codecs.open(file_out, "w") as fo:
@@ -109,6 +98,4 @@ def process_map(file_in, pretty = False):
                     fo.write(json.dumps(el, indent=2)+"\n")
                 else:
                     fo.write(json.dumps(el) + "\n")
-            root.clear()
-# return data
-# OSM_data = process_map(OSM_FILE)
+    return data
