@@ -13,18 +13,18 @@ problemchars = re.compile(r'[=\+/&<>;\'"\?%#$@\,\. \t\r\n]')
 
 CREATED = [ "version", "changeset", "timestamp", "user", "uid"]
 
-mapping = {
-          "Av.": "Avenida",
-          "Av ": "Avenida ",
-          "R.":"Rua"
-        }
-postcode_re = re.compile(r'^\d{5}-\d{3}$', re.IGNORECASE)
-
-def update_name(name, mapping):
-    for key in mapping:
-        if key in name:
-            return name.replace(key, mapping[key])
-    return name
+mapping = {"St": "Street", "St.": "Street", "street": "Street","st": "Street",
+           "Dr": "Drive", "Dr.": "Drive","Ct":"Court",
+          "Blvd":"Boulevard","blvd":"Boulevard","Blvd.":"Boulevard",
+           "Ct.":"Court","HWY":"Highway",
+           "Ln":"Lane","Ter":"Terrace","Ave.":"Avenue","Ave":"Avenue",
+           "road":"Road","rd":"Road","Rd.":"Road","Rd": "Road","place":"Place","US":"U.S.",
+           "Pl":"Place","Rte":"Route","IL":"Illinois","W":"West","Trl":"Trail",
+           "avenue":"Avenue","Pkwy":"Parkway","Cir":"Circle",
+            "N":"North","N.":"North","E":"East","S":"South","S":"South","S.":"South",
+           "W.":"West","E.":"East","W":"West"
+          }
+postcode_re = re.compile(r'\b\d{5}\b$', re.IGNORECASE)
 
 def correctPostcode(value):
     m = postcode_re.match(value)
