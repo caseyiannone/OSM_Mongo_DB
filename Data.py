@@ -27,16 +27,12 @@ mapping = {"St": "Street", "St.": "Street", "street": "Street","st": "Street",
 postcode_re = re.compile(r'\b\d{5}\b$', re.IGNORECASE)
 
 def correctPostcode(value):
-    m = postcode_re.match(value)
-    if not m:
-        new_postcode = re.sub(r'(\d{5}).*?(\d{3}).*', r'\1-\2', value.encode("utf-8"));
-        m = postcode_re.match(new_postcode)
-        if m:
-            # print new_postcode
-            return new_postcode
+    match = re.search(r'\d{5}', value)
+    if not match:
         return None
     else:
-        return value
+        new_postcode = match.group()
+        return new_postcode
 
 def shape_element(element):
     node = {}
